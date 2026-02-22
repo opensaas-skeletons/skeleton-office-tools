@@ -70,6 +70,7 @@ export default function TextOverlay({
     <div
       ref={overlayRef}
       onMouseDown={handleMouseDown}
+      onClick={(e) => e.stopPropagation()}
       className={`absolute group ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
       style={{
         left: annotation.x * scale,

@@ -149,13 +149,21 @@ export default function Walkthrough({ onComplete, onSaveSignature }: Walkthrough
 
           {/* Progress dots + navigation */}
           <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
-            <button
-              onClick={prev}
-              disabled={currentStep === 0}
-              className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 disabled:invisible transition-colors"
-            >
-              Back
-            </button>
+            {currentStep === 0 ? (
+              <button
+                onClick={finish}
+                className="px-4 py-2 text-sm text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                Skip
+              </button>
+            ) : (
+              <button
+                onClick={prev}
+                className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 transition-colors"
+              >
+                Back
+              </button>
+            )}
 
             {/* Dots */}
             <div className="flex gap-2">

@@ -7,11 +7,11 @@ import {
   PDF_SCALE_STEP,
 } from "../constants";
 
-// Set up pdf.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.mjs",
-  import.meta.url
-).toString();
+// Set up pdf.js worker — use Vite's URL resolution for the worker file.
+// The ?url suffix ensures Vite emits the file and returns a resolved path,
+// which works reliably in both dev and Tauri production builds.
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface UsePdfViewerReturn {
   pdfDoc: pdfjsLib.PDFDocumentProxy | null;

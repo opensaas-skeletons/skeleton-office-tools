@@ -128,11 +128,9 @@ export function useOverlays(): UseOverlaysReturn {
   const removeAnnotation = useCallback(
     (id: string) => {
       setAnnotations((prev) => prev.filter((a) => a.id !== id));
-      if (selectedId === id) {
-        setSelectedId(null);
-      }
+      setSelectedId((prev) => (prev === id ? null : prev));
     },
-    [selectedId]
+    []
   );
 
   const saveAllAnnotations = useCallback(

@@ -17,6 +17,28 @@ pub async fn open_file_dialog(app: tauri::AppHandle) -> Result<Option<String>, S
 }
 
 #[tauri::command]
+pub async fn save_file_dialog(
+    app: tauri::AppHandle,
+    default_name: Option<String>,
+) -> Result<Option<String>, String> {
+    let mut builder = app
+        .dialog()
+        .file()
+        .add_filter("PDF Files", &["pdf"]);
+
+    if let Some(name) = default_name {
+        builder = builder.set_file_name(&name);
+    }
+
+    let file = builder.blocking_save_file();
+
+    match file {
+        Some(path) => Ok(Some(path.to_string())),
+        None => Ok(None),
+    }
+}
+
+#[tauri::command]
 pub async fn read_file_bytes(path: String) -> Result<Vec<u8>, String> {
     fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))
 }

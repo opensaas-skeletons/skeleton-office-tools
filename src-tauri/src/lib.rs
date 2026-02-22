@@ -11,6 +11,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             commands::documents::open_file_dialog,
+            commands::documents::save_file_dialog,
             commands::documents::read_file_bytes,
             commands::documents::write_file_bytes,
             commands::documents::get_file_opened_with,

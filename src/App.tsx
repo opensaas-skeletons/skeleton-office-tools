@@ -31,6 +31,7 @@ function AppContent() {
     openFile,
     openFilePath,
     closeFile,
+    clearRecents,
   } = useDocument();
   const {
     pdfDoc,
@@ -67,21 +68,26 @@ function AppContent() {
   // Load PDF when file bytes change
   useEffect(() => {
     if (currentDoc.fileBytes) {
-      loadDocument(currentDoc.fileBytes).then(async (numPages) => {
-        // Get page dimensions
-        const dims: Array<{ width: number; height: number }> = [];
-        // We get dimensions from the first render pass
-        // For now use standard letter size, the actual size is set by the canvas
-        for (let i = 0; i < numPages; i++) {
-          dims.push({ width: 612, height: 792 });
-        }
-        setPageDimensions(dims);
+      loadDocument(currentDoc.fileBytes)
+        .then(async (numPages) => {
+          // Get page dimensions
+          const dims: Array<{ width: number; height: number }> = [];
+          // We get dimensions from the first render pass
+          // For now use standard letter size, the actual size is set by the canvas
+          for (let i = 0; i < numPages; i++) {
+            dims.push({ width: 612, height: 792 });
+          }
+          setPageDimensions(dims);
 
-        // Load saved annotations for this document
-        if (currentDoc.filePath) {
-          await loadAnnotations(currentDoc.filePath);
-        }
-      });
+          // Load saved annotations for this document
+          if (currentDoc.filePath) {
+            await loadAnnotations(currentDoc.filePath);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load PDF document:", err);
+          showToast("error", "Failed to load PDF document");
+        });
     }
   }, [currentDoc.fileBytes]);
 
@@ -144,6 +150,26 @@ function AppContent() {
     }
   }, [currentDoc.fileBytes, currentDoc.filePath, saveAllAnnotations, showToast]);
 
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        switch (e.key.toLowerCase()) {
+          case "o":
+            e.preventDefault();
+            openFile();
+            break;
+          case "s":
+            e.preventDefault();
+            handleSaveFile();
+            break;
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [openFile, handleSaveFile]);
+
   // Loading state
   if (onboardingComplete === null) {
     return (
@@ -179,7 +205,7 @@ function AppContent() {
         <Sidebar
           recentDocuments={recentDocuments}
           onOpenRecent={openFilePath}
-          onClearRecents={() => {}}
+          onClearRecents={clearRecents}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
@@ -200,6 +226,7 @@ function AppContent() {
               />
               <PdfViewer
                 pageCount={pageCount}
+                currentPage={currentPage}
                 scale={scale}
                 mode={mode}
                 annotations={annotations}

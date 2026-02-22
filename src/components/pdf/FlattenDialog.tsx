@@ -43,14 +43,16 @@ export default function FlattenDialog({
       }
 
       setProgress("Choosing save location...");
-      const savePath: string | null = await invoke("open_file_dialog");
+      const defaultName = currentFilePath?.split(/[\\/]/).pop()?.replace(/\.pdf$/i, "") ?? "document";
+      const savePath: string | null = await invoke("save_file_dialog", {
+        defaultName: defaultName + "_edited.pdf",
+      });
       if (!savePath) {
         setIsSaving(false);
         setProgress("");
         return;
       }
 
-      // Use save dialog for path selection
       const targetPath = savePath.endsWith(".pdf") ? savePath : savePath + ".pdf";
 
       setProgress("Saving file...");

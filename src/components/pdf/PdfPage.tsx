@@ -37,6 +37,7 @@ export default function PdfPage({
   onPageClick,
 }: PdfPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (canvasRef.current) {
@@ -63,6 +64,8 @@ export default function PdfPage({
 
   return (
     <div
+      ref={containerRef}
+      data-page-number={pageNumber}
       className="relative mx-auto shadow-lg bg-white"
       style={{
         width: width * scale,

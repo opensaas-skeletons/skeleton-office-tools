@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { getRecentDocuments } from "../db/sqlite";
+import { getRecentDocuments, addRecentDocument, clearRecentDocuments } from "../db/sqlite";
 import type { RecentDocument } from "../types/document";
 
 declare global {
@@ -22,6 +22,7 @@ interface UseDocumentReturn {
   openFilePath: (path: string) => Promise<void>;
   saveFile: (bytes: Uint8Array, path?: string) => Promise<void>;
   closeFile: () => void;
+  clearRecents: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -33,20 +34,6 @@ export function useDocument(): UseDocumentReturn {
   });
   const [recentDocuments, setRecentDocuments] = useState<RecentDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-
-  // Load recent documents on mount
-  useEffect(() => {
-    loadRecentDocuments();
-  }, []);
-
-  // Check for "Open With" file on mount
-  useEffect(() => {
-    if (window.__OPENED_FILE__) {
-      const filePath = window.__OPENED_FILE__;
-      delete window.__OPENED_FILE__;
-      openFilePath(filePath);
-    }
-  }, []);
 
   const loadRecentDocuments = async () => {
     try {
@@ -78,6 +65,14 @@ export function useDocument(): UseDocumentReturn {
         fileName,
         fileBytes: uint8,
       });
+
+      // Record in recent documents
+      try {
+        await addRecentDocument(path, fileName, uint8.length, 0);
+        await loadRecentDocuments();
+      } catch (dbErr) {
+        console.error("Failed to record recent document:", dbErr);
+      }
     } catch (err) {
       console.error("Failed to read file:", err);
     } finally {
@@ -129,6 +124,41 @@ export function useDocument(): UseDocumentReturn {
     });
   }, []);
 
+  const clearRecents = useCallback(async () => {
+    try {
+      await clearRecentDocuments();
+      setRecentDocuments([]);
+    } catch (err) {
+      console.error("Failed to clear recent documents:", err);
+    }
+  }, []);
+
+  // Load recent documents on mount
+  useEffect(() => {
+    loadRecentDocuments();
+  }, []);
+
+  // Check for "Open With" file on mount
+  useEffect(() => {
+    const checkOpenWith = async () => {
+      if (window.__OPENED_FILE__) {
+        const filePath = window.__OPENED_FILE__;
+        delete window.__OPENED_FILE__;
+        await openFilePath(filePath);
+        return;
+      }
+      try {
+        const filePath: string | null = await invoke("get_file_opened_with");
+        if (filePath) {
+          await openFilePath(filePath);
+        }
+      } catch {
+        // No file was passed — that's fine
+      }
+    };
+    checkOpenWith();
+  }, [openFilePath]);
+
   return {
     document,
     recentDocuments,
@@ -136,6 +166,7 @@ export function useDocument(): UseDocumentReturn {
     openFilePath,
     saveFile,
     closeFile,
+    clearRecents,
     isLoading,
   };
 }

@@ -100,6 +100,11 @@ export async function removeRecentDocument(filePath: string): Promise<void> {
   await database.execute("DELETE FROM documents WHERE file_path = $1", [filePath]);
 }
 
+export async function clearRecentDocuments(): Promise<void> {
+  const database = await getDb();
+  await database.execute("DELETE FROM documents");
+}
+
 // --- Signatures ---
 
 export async function saveSignature(

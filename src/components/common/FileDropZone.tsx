@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 interface FileDropZoneProps {
   onFileDrop: (filePath: string) => void;
@@ -7,52 +8,51 @@ interface FileDropZoneProps {
 export default function FileDropZone({ onFileDrop }: FileDropZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const handleDragOver = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(true);
-  }, []);
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
 
-  const handleDragLeave = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Only trigger if leaving the window entirely
-    if (e.relatedTarget === null || !(e.relatedTarget as Node).ownerDocument) {
-      setIsDragOver(false);
-    }
-  }, []);
+    const setup = async () => {
+      const currentWindow = getCurrentWindow();
+      unlisten = await currentWindow.onDragDropEvent((event) => {
+        const payload = event.payload;
 
-  const handleDrop = useCallback(
-    (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragOver(false);
-
-      const files = e.dataTransfer?.files;
-      if (files && files.length > 0) {
-        const file = files[0];
-        if (file.name.toLowerCase().endsWith(".pdf")) {
-          // In Tauri, file paths come from the drop event
-          const path = (file as File & { path?: string }).path;
-          if (path) {
-            onFileDrop(path);
+        if (payload.type === "enter" || payload.type === "over") {
+          setIsDragOver(true);
+        } else if (payload.type === "leave") {
+          setIsDragOver(false);
+        } else if (payload.type === "drop") {
+          setIsDragOver(false);
+          const paths = payload.paths;
+          if (paths && paths.length > 0) {
+            const filePath = paths[0];
+            if (filePath.toLowerCase().endsWith(".pdf")) {
+              onFileDrop(filePath);
+            }
           }
         }
-      }
-    },
-    [onFileDrop]
-  );
-
-  useEffect(() => {
-    window.addEventListener("dragover", handleDragOver);
-    window.addEventListener("dragleave", handleDragLeave);
-    window.addEventListener("drop", handleDrop);
-    return () => {
-      window.removeEventListener("dragover", handleDragOver);
-      window.removeEventListener("dragleave", handleDragLeave);
-      window.removeEventListener("drop", handleDrop);
+      });
     };
-  }, [handleDragOver, handleDragLeave, handleDrop]);
+
+    setup();
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [onFileDrop]);
+
+  // Also prevent default browser drag behavior so files don't navigate
+  useEffect(() => {
+    const prevent = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("dragover", prevent);
+    window.addEventListener("drop", prevent);
+    return () => {
+      window.removeEventListener("dragover", prevent);
+      window.removeEventListener("drop", prevent);
+    };
+  }, []);
 
   if (!isDragOver) return null;
 
