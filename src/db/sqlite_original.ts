@@ -1,38 +1,18 @@
 import Database from "@tauri-apps/plugin-sql";
-import {
-  initialize,
-  runMigrations,
-  TauriSqlAdapter,
-  getAdapter,
-} from "@skeleton-database/embedded";
 import { DB_NAME } from "../constants";
 
-let initialized = false;
+let db: Database | null = null;
 
-/**
- * Initialize the database: set up the embedded library adapter,
- * run skeleton-database migrations, then create app-specific tables.
- */
-export async function initDatabase(): Promise<void> {
-  if (initialized) return;
-
-  const db = await Database.load(DB_NAME);
-  await db.execute("PRAGMA foreign_keys = ON", []);
-
-  initialize(new TauriSqlAdapter(db));
-  await runMigrations();
-  await runAppMigrations();
-
-  initialized = true;
+export async function getDb(): Promise<Database> {
+  if (!db) {
+    db = await Database.load(DB_NAME);
+    await runMigrations(db);
+  }
+  return db;
 }
 
-/**
- * App-specific tables that coexist alongside the skeleton-database schema.
- */
-async function runAppMigrations(): Promise<void> {
-  const adapter = getAdapter();
-
-  await adapter.execute(`
+async function runMigrations(database: Database): Promise<void> {
+  await database.execute(`
     CREATE TABLE IF NOT EXISTS documents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       file_path TEXT NOT NULL UNIQUE,
@@ -43,7 +23,7 @@ async function runAppMigrations(): Promise<void> {
     )
   `);
 
-  await adapter.execute(`
+  await database.execute(`
     CREATE TABLE IF NOT EXISTS signatures (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -53,7 +33,7 @@ async function runAppMigrations(): Promise<void> {
     )
   `);
 
-  await adapter.execute(`
+  await database.execute(`
     CREATE TABLE IF NOT EXISTS annotations (
       id TEXT PRIMARY KEY,
       document_path TEXT NOT NULL,
@@ -72,18 +52,12 @@ async function runAppMigrations(): Promise<void> {
     )
   `);
 
-  await adapter.execute(`
+  await database.execute(`
     CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     )
   `);
-}
-
-// Helper to ensure DB is initialized before any query
-async function db() {
-  await initDatabase();
-  return getAdapter();
 }
 
 // --- Documents ---
@@ -94,14 +68,14 @@ export async function addRecentDocument(
   fileSize: number,
   pageCount: number
 ): Promise<void> {
-  const adapter = await db();
-  await adapter.execute(
+  const database = await getDb();
+  await database.execute(
     `INSERT INTO documents (file_path, file_name, file_size, page_count, last_opened)
-     VALUES (?, ?, ?, ?, datetime('now'))
+     VALUES ($1, $2, $3, $4, datetime('now'))
      ON CONFLICT(file_path) DO UPDATE SET
        last_opened = datetime('now'),
-       file_size = excluded.file_size,
-       page_count = excluded.page_count`,
+       file_size = $3,
+       page_count = $4`,
     [filePath, fileName, fileSize, pageCount]
   );
 }
@@ -114,21 +88,21 @@ export async function getRecentDocuments(limit = 20): Promise<Array<{
   page_count: number;
   last_opened: string;
 }>> {
-  const adapter = await db();
-  return adapter.select(
-    "SELECT * FROM documents ORDER BY last_opened DESC LIMIT ?",
+  const database = await getDb();
+  return database.select(
+    "SELECT * FROM documents ORDER BY last_opened DESC LIMIT $1",
     [limit]
   );
 }
 
 export async function removeRecentDocument(filePath: string): Promise<void> {
-  const adapter = await db();
-  await adapter.execute("DELETE FROM documents WHERE file_path = ?", [filePath]);
+  const database = await getDb();
+  await database.execute("DELETE FROM documents WHERE file_path = $1", [filePath]);
 }
 
 export async function clearRecentDocuments(): Promise<void> {
-  const adapter = await db();
-  await adapter.execute("DELETE FROM documents");
+  const database = await getDb();
+  await database.execute("DELETE FROM documents");
 }
 
 // --- Signatures ---
@@ -138,9 +112,9 @@ export async function saveSignature(
   fontFamily: string,
   color: string
 ): Promise<number> {
-  const adapter = await db();
-  const result = await adapter.execute(
-    "INSERT INTO signatures (name, font_family, color) VALUES (?, ?, ?)",
+  const database = await getDb();
+  const result = await database.execute(
+    "INSERT INTO signatures (name, font_family, color) VALUES ($1, $2, $3)",
     [name, fontFamily, color]
   );
   return result.lastInsertId ?? 0;
@@ -153,13 +127,13 @@ export async function getSignatures(): Promise<Array<{
   color: string;
   created_at: string;
 }>> {
-  const adapter = await db();
-  return adapter.select("SELECT * FROM signatures ORDER BY created_at DESC");
+  const database = await getDb();
+  return database.select("SELECT * FROM signatures ORDER BY created_at DESC");
 }
 
 export async function deleteSignature(id: number): Promise<void> {
-  const adapter = await db();
-  await adapter.execute("DELETE FROM signatures WHERE id = ?", [id]);
+  const database = await getDb();
+  await database.execute("DELETE FROM signatures WHERE id = $1", [id]);
 }
 
 // --- Annotations ---
@@ -178,11 +152,11 @@ export async function saveAnnotation(annotation: {
   color?: string;
   signatureId?: number;
 }): Promise<void> {
-  const adapter = await db();
-  await adapter.execute(
+  const database = await getDb();
+  await database.execute(
     `INSERT OR REPLACE INTO annotations
      (id, document_path, page_number, type, x, y, width, height, text_content, font_size, color, signature_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     [
       annotation.id,
       annotation.documentPath,
@@ -214,38 +188,38 @@ export async function getAnnotationsForDocument(documentPath: string): Promise<A
   color: string | null;
   signature_id: number | null;
 }>> {
-  const adapter = await db();
-  return adapter.select(
-    "SELECT * FROM annotations WHERE document_path = ? ORDER BY page_number, created_at",
+  const database = await getDb();
+  return database.select(
+    "SELECT * FROM annotations WHERE document_path = $1 ORDER BY page_number, created_at",
     [documentPath]
   );
 }
 
 export async function deleteAnnotation(id: string): Promise<void> {
-  const adapter = await db();
-  await adapter.execute("DELETE FROM annotations WHERE id = ?", [id]);
+  const database = await getDb();
+  await database.execute("DELETE FROM annotations WHERE id = $1", [id]);
 }
 
 export async function deleteAnnotationsForDocument(documentPath: string): Promise<void> {
-  const adapter = await db();
-  await adapter.execute("DELETE FROM annotations WHERE document_path = ?", [documentPath]);
+  const database = await getDb();
+  await database.execute("DELETE FROM annotations WHERE document_path = $1", [documentPath]);
 }
 
 // --- Settings ---
 
 export async function getSetting(key: string): Promise<string | null> {
-  const adapter = await db();
-  const rows: Array<{ value: string }> = await adapter.select(
-    "SELECT value FROM app_settings WHERE key = ?",
+  const database = await getDb();
+  const rows: Array<{ value: string }> = await database.select(
+    "SELECT value FROM app_settings WHERE key = $1",
     [key]
   );
   return rows.length > 0 ? rows[0].value : null;
 }
 
 export async function setSetting(key: string, value: string): Promise<void> {
-  const adapter = await db();
-  await adapter.execute(
-    "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)",
+  const database = await getDb();
+  await database.execute(
+    "INSERT OR REPLACE INTO app_settings (key, value) VALUES ($1, $2)",
     [key, value]
   );
 }
