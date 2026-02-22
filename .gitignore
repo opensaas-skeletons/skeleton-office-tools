@@ -1,0 +1,23 @@
+node_modules/
+dist/
+target/
+.vite/
+*.log
+
+# Tauri build output
+src-tauri/target/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment
+.env
+.env.local
