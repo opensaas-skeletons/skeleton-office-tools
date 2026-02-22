@@ -54,6 +54,8 @@ function AppContent() {
     removeAnnotation,
     selectedId,
     setSelectedId,
+    newAnnotationId,
+    clearNewAnnotationId,
     loadAnnotations,
     saveAllAnnotations,
   } = useOverlays();
@@ -222,7 +224,9 @@ function AppContent() {
                 onScaleChange={setScale}
                 onModeChange={setMode}
                 onFlattenClick={() => setShowFlattenDialog(true)}
+                onCreateSignature={() => setShowSignaturePad(true)}
                 annotationCount={annotations.length}
+                signatureCount={signatures.length}
               />
               <PdfViewer
                 pageCount={pageCount}
@@ -232,12 +236,14 @@ function AppContent() {
                 annotations={annotations}
                 signatures={signatures}
                 selectedAnnotationId={selectedId}
+                newAnnotationId={newAnnotationId}
                 pageDimensions={pageDimensions}
                 renderPage={renderPage}
                 onSelectAnnotation={(id) => setSelectedId(id)}
                 onUpdateAnnotation={updateAnnotation}
                 onDeleteAnnotation={removeAnnotation}
                 onPageClick={handlePageClick}
+                onNewAnnotationHandled={clearNewAnnotationId}
               />
             </>
           ) : (

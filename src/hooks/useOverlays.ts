@@ -6,6 +6,9 @@ import type {
   PdfMode,
 } from "../types/pdf";
 import {
+  isTextAnnotation,
+} from "../types/pdf";
+import {
   saveAnnotation,
   getAnnotationsForDocument,
 } from "../db/sqlite";
@@ -26,6 +29,8 @@ interface UseOverlaysReturn {
   removeAnnotation: (id: string) => void;
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
+  newAnnotationId: string | null;
+  clearNewAnnotationId: () => void;
   loadAnnotations: (documentPath: string) => Promise<void>;
   saveAllAnnotations: (documentPath: string) => Promise<void>;
 }
@@ -38,6 +43,11 @@ export function useOverlays(): UseOverlaysReturn {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [mode, setMode] = useState<PdfMode>("view");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [newAnnotationId, setNewAnnotationId] = useState<string | null>(null);
+
+  const clearNewAnnotationId = useCallback(() => {
+    setNewAnnotationId(null);
+  }, []);
 
   const loadAnnotations = useCallback(async (documentPath: string) => {
     try {
@@ -88,6 +98,7 @@ export function useOverlays(): UseOverlaysReturn {
       };
       setAnnotations((prev) => [...prev, annotation]);
       setSelectedId(annotation.id);
+      setNewAnnotationId(annotation.id);
       return annotation;
     },
     []
@@ -137,7 +148,7 @@ export function useOverlays(): UseOverlaysReturn {
     async (documentPath: string) => {
       try {
         for (const ann of annotations) {
-          if ("text" in ann) {
+          if (isTextAnnotation(ann)) {
             const textAnn = ann as TextAnnotation;
             await saveAnnotation({
               id: textAnn.id,
@@ -184,6 +195,8 @@ export function useOverlays(): UseOverlaysReturn {
     removeAnnotation,
     selectedId,
     setSelectedId,
+    newAnnotationId,
+    clearNewAnnotationId,
     loadAnnotations,
     saveAllAnnotations,
   };

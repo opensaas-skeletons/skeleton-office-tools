@@ -14,7 +14,9 @@ interface PdfToolbarProps {
   onScaleChange: (scale: number) => void;
   onModeChange: (mode: PdfMode) => void;
   onFlattenClick: () => void;
+  onCreateSignature: () => void;
   annotationCount: number;
+  signatureCount: number;
 }
 
 export default function PdfToolbar({
@@ -26,7 +28,9 @@ export default function PdfToolbar({
   onScaleChange,
   onModeChange,
   onFlattenClick,
+  onCreateSignature,
   annotationCount,
+  signatureCount,
 }: PdfToolbarProps) {
   const handlePageInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -137,6 +141,17 @@ export default function PdfToolbar({
             <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
           </svg>
         </ModeButton>
+        {mode === "sign" && (
+          <ToolbarButton
+            onClick={onCreateSignature}
+            title={signatureCount === 0 ? "Create your first signature" : "Create new signature"}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </ToolbarButton>
+        )}
       </div>
 
       {/* Spacer */}

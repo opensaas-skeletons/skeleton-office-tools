@@ -5,6 +5,7 @@ import { TEXT_MIN_FONT_SIZE, TEXT_MAX_FONT_SIZE } from "../../constants";
 interface TextOverlayProps {
   annotation: TextAnnotation;
   selected: boolean;
+  isNew?: boolean;
   onSelect: (id: string) => void;
   onUpdate: (id: string, updates: Partial<TextAnnotation>) => void;
   onDelete: (id: string) => void;
@@ -14,23 +15,45 @@ interface TextOverlayProps {
 export default function TextOverlay({
   annotation,
   selected,
+  isNew,
   onSelect,
   onUpdate,
   onDelete,
   scale,
 }: TextOverlayProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, origX: 0, origY: 0 });
   const overlayRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus the input when this overlay is newly created
+  useEffect(() => {
+    if (isNew && inputRef.current) {
+      inputRef.current.focus();
+      setIsEditing(true);
+    }
+  }, [isNew]);
+
+  // When selected externally (e.g. clicking the border area), don't force focus
+  // but when deselected, exit editing mode
+  useEffect(() => {
+    if (!selected) {
+      setIsEditing(false);
+    }
+  }, [selected]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "BUTTON") {
+      const tag = (e.target as HTMLElement).tagName;
+      // Let input and button handle their own events
+      if (tag === "INPUT" || tag === "BUTTON") {
         return;
       }
       e.preventDefault();
       e.stopPropagation();
       onSelect(annotation.id);
+      setIsEditing(false);
       setIsDragging(true);
       dragStart.current = {
         x: e.clientX,
@@ -66,12 +89,38 @@ export default function TextOverlay({
     };
   }, [isDragging, annotation.id, onUpdate, scale]);
 
+  // Handle keyboard shortcut to delete overlay (Delete key when input is not focused)
+  useEffect(() => {
+    if (!selected) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only delete the overlay if Delete is pressed and input is NOT focused
+      if (e.key === "Delete" && document.activeElement !== inputRef.current) {
+        e.preventDefault();
+        onDelete(annotation.id);
+      }
+      // Escape deselects the overlay
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (isEditing) {
+          setIsEditing(false);
+          inputRef.current?.blur();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selected, isEditing, annotation.id, onDelete]);
+
   return (
     <div
       ref={overlayRef}
       onMouseDown={handleMouseDown}
       onClick={(e) => e.stopPropagation()}
-      className={`absolute group ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+      className={`absolute group ${
+        isDragging ? "cursor-grabbing" : isEditing ? "cursor-text" : "cursor-grab"
+      }`}
       style={{
         left: annotation.x * scale,
         top: annotation.y * scale,
@@ -89,11 +138,22 @@ export default function TextOverlay({
 
       {/* Text input */}
       <input
+        ref={inputRef}
         type="text"
         value={annotation.text}
         onChange={(e) => onUpdate(annotation.id, { text: e.target.value })}
-        onFocus={() => onSelect(annotation.id)}
-        className="w-full bg-transparent border-none outline-none"
+        onFocus={() => {
+          onSelect(annotation.id);
+          setIsEditing(true);
+        }}
+        onBlur={() => setIsEditing(false)}
+        onMouseDown={(e) => {
+          // Stop propagation so clicking the input doesn't trigger drag
+          e.stopPropagation();
+          onSelect(annotation.id);
+          setIsEditing(true);
+        }}
+        className="w-full bg-transparent border-none outline-none cursor-text"
         style={{
           fontSize: annotation.fontSize * scale,
           color: annotation.color,
@@ -107,6 +167,7 @@ export default function TextOverlay({
         <div className="absolute -top-8 left-0 flex items-center gap-1 bg-white rounded-md shadow-md border border-slate-200 px-1 py-0.5">
           {/* Font size control */}
           <button
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               onUpdate(annotation.id, {
@@ -121,6 +182,7 @@ export default function TextOverlay({
             {annotation.fontSize}
           </span>
           <button
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               onUpdate(annotation.id, {
@@ -136,6 +198,7 @@ export default function TextOverlay({
 
           {/* Delete */}
           <button
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
               onDelete(annotation.id);

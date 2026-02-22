@@ -1,7 +1,9 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import type { Annotation, TextAnnotation, SignatureAnnotation } from "../types/pdf";
 import { isTextAnnotation } from "../types/pdf";
 import type { Signature } from "../types/signature";
+import { SIGNATURE_DEFAULT_FONT_SIZE } from "../constants";
 
 /**
  * Map hex color string to pdf-lib rgb color.
@@ -15,21 +17,25 @@ function hexToRgb(hex: string) {
 }
 
 /**
- * Map signature font families to pdf-lib standard fonts.
- * Custom font embedding can be added later by loading TTF/OTF bytes
- * and calling pdfDoc.embedFont(fontBytes).
+ * Font file paths keyed by font family name.
+ * These resolve to files in public/fonts/ (served at /fonts/ by Vite/Tauri).
  */
-function mapFontToStandard(fontFamily: string): typeof StandardFonts[keyof typeof StandardFonts] {
-  switch (fontFamily) {
-    case "Dancing Script":
-      return StandardFonts.Courier;
-    case "Great Vibes":
-      return StandardFonts.TimesRomanItalic;
-    case "Sacramento":
-      return StandardFonts.HelveticaOblique;
-    default:
-      return StandardFonts.Helvetica;
+const FONT_FILE_MAP: Record<string, string> = {
+  "Dancing Script": "/fonts/DancingScript-Regular.ttf",
+  "Great Vibes": "/fonts/GreatVibes-Regular.ttf",
+  Sacramento: "/fonts/Sacramento-Regular.ttf",
+};
+
+/**
+ * Fetch a font file as bytes for embedding in pdf-lib.
+ */
+async function fetchFontBytes(url: string): Promise<Uint8Array> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch font: ${url} (${response.status})`);
   }
+  const buffer = await response.arrayBuffer();
+  return new Uint8Array(buffer);
 }
 
 /**
@@ -47,12 +53,41 @@ export async function flattenPdf(
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.load(pdfBytes);
 
+  // Register fontkit so pdf-lib can parse and embed custom TTF fonts
+  pdfDoc.registerFontkit(fontkit);
+
   // Pre-embed fonts we'll need
   const embeddedFonts = new Map<string, Awaited<ReturnType<typeof pdfDoc.embedFont>>>();
 
   // Standard font for text annotations
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
   embeddedFonts.set("Helvetica", helvetica);
+
+  // Pre-embed custom signature fonts that are actually used
+  const usedFontFamilies = new Set<string>();
+  for (const annotation of annotations) {
+    if (!isTextAnnotation(annotation)) {
+      const sigAnn = annotation as SignatureAnnotation;
+      const sig = signatures.find((s) => s.id === sigAnn.signatureId);
+      if (sig) usedFontFamilies.add(sig.fontFamily);
+    }
+  }
+
+  for (const family of usedFontFamilies) {
+    const fontPath = FONT_FILE_MAP[family];
+    if (fontPath) {
+      try {
+        const fontBytes = await fetchFontBytes(fontPath);
+        const embedded = await pdfDoc.embedFont(fontBytes);
+        embeddedFonts.set(family, embedded);
+      } catch (err) {
+        console.warn(`Could not embed font "${family}", falling back to Helvetica:`, err);
+        embeddedFonts.set(family, helvetica);
+      }
+    } else {
+      embeddedFonts.set(family, helvetica);
+    }
+  }
 
   // Group annotations by page
   const pages = pdfDoc.getPages();
@@ -66,6 +101,8 @@ export async function flattenPdf(
 
     if (isTextAnnotation(annotation)) {
       const textAnn = annotation as TextAnnotation;
+      if (!textAnn.text) continue; // skip empty text annotations
+
       const color = hexToRgb(textAnn.color);
       const fontSize = textAnn.fontSize;
 
@@ -84,18 +121,11 @@ export async function flattenPdf(
       const sig = signatures.find((s) => s.id === sigAnn.signatureId);
       if (!sig) continue;
 
-      const standardFontKey = mapFontToStandard(sig.fontFamily);
-
-      // Cache embedded fonts
-      if (!embeddedFonts.has(standardFontKey)) {
-        const embedded = await pdfDoc.embedFont(standardFontKey);
-        embeddedFonts.set(standardFontKey, embedded);
-      }
-      const font = embeddedFonts.get(standardFontKey)!;
+      const font = embeddedFonts.get(sig.fontFamily) ?? helvetica;
       const color = hexToRgb(sig.color);
 
-      // Size the signature to fit the annotation box
-      const fontSize = sigAnn.height * 0.7;
+      // Use the same font size as the on-screen overlay for consistent rendering
+      const fontSize = SIGNATURE_DEFAULT_FONT_SIZE;
       const pdfY = pageHeight - sigAnn.y - fontSize;
 
       page.drawText(sig.name, {

@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback } from "react";
-import type { Annotation, TextAnnotation, SignatureAnnotation, PdfMode } from "../../types/pdf";
+import type { Annotation, SignatureAnnotation, PdfMode } from "../../types/pdf";
 import { isTextAnnotation, isSignatureAnnotation } from "../../types/pdf";
 import type { Signature } from "../../types/signature";
 import TextOverlay from "./TextOverlay";
@@ -14,11 +14,13 @@ interface PdfPageProps {
   annotations: Annotation[];
   signatures: Signature[];
   selectedAnnotationId: string | null;
+  newAnnotationId: string | null;
   mode: PdfMode;
   onSelectAnnotation: (id: string | null) => void;
   onUpdateAnnotation: (id: string, updates: Partial<Annotation>) => void;
   onDeleteAnnotation: (id: string) => void;
   onPageClick: (pageNumber: number, x: number, y: number) => void;
+  onNewAnnotationHandled: () => void;
 }
 
 export default function PdfPage({
@@ -30,11 +32,13 @@ export default function PdfPage({
   annotations,
   signatures,
   selectedAnnotationId,
+  newAnnotationId,
   mode,
   onSelectAnnotation,
   onUpdateAnnotation,
   onDeleteAnnotation,
   onPageClick,
+  onNewAnnotationHandled,
 }: PdfPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -90,13 +94,21 @@ export default function PdfPage({
       >
         {pageAnnotations.map((annotation) => {
           if (isTextAnnotation(annotation)) {
+            const isNew = newAnnotationId === annotation.id;
             return (
               <TextOverlay
                 key={annotation.id}
                 annotation={annotation}
                 selected={selectedAnnotationId === annotation.id}
-                onSelect={onSelectAnnotation}
-                onUpdate={onUpdateAnnotation as (id: string, updates: Partial<TextAnnotation>) => void}
+                isNew={isNew}
+                onSelect={(id) => {
+                  if (isNew) onNewAnnotationHandled();
+                  onSelectAnnotation(id);
+                }}
+                onUpdate={(id, updates) => {
+                  if (isNew) onNewAnnotationHandled();
+                  onUpdateAnnotation(id, updates);
+                }}
                 onDelete={onDeleteAnnotation}
                 scale={scale}
               />

@@ -16,12 +16,14 @@ interface PdfViewerProps {
   annotations: Annotation[];
   signatures: Signature[];
   selectedAnnotationId: string | null;
+  newAnnotationId: string | null;
   pageDimensions: PageDimension[];
   renderPage: (pageNumber: number, canvas: HTMLCanvasElement) => void;
   onSelectAnnotation: (id: string | null) => void;
   onUpdateAnnotation: (id: string, updates: Partial<Annotation>) => void;
   onDeleteAnnotation: (id: string) => void;
   onPageClick: (pageNumber: number, x: number, y: number) => void;
+  onNewAnnotationHandled: () => void;
 }
 
 export default function PdfViewer({
@@ -32,12 +34,14 @@ export default function PdfViewer({
   annotations,
   signatures,
   selectedAnnotationId,
+  newAnnotationId,
   pageDimensions,
   renderPage,
   onSelectAnnotation,
   onUpdateAnnotation,
   onDeleteAnnotation,
   onPageClick,
+  onNewAnnotationHandled,
 }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -87,11 +91,13 @@ export default function PdfViewer({
               annotations={annotations}
               signatures={signatures}
               selectedAnnotationId={selectedAnnotationId}
+              newAnnotationId={newAnnotationId}
               mode={mode}
               onSelectAnnotation={onSelectAnnotation}
               onUpdateAnnotation={onUpdateAnnotation}
               onDeleteAnnotation={onDeleteAnnotation}
               onPageClick={onPageClick}
+              onNewAnnotationHandled={onNewAnnotationHandled}
             />
           );
         })}
