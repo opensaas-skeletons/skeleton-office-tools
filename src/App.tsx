@@ -32,6 +32,7 @@ function AppContent() {
     openFilePath,
     closeFile,
     clearRecents,
+    fileSizeWarning,
   } = useDocument();
   const {
     pdfDoc,
@@ -67,6 +68,13 @@ function AppContent() {
     });
   }, []);
 
+  // Show file size warning
+  useEffect(() => {
+    if (fileSizeWarning) {
+      showToast("info", fileSizeWarning);
+    }
+  }, [fileSizeWarning]);
+
   // Load PDF when file bytes change
   useEffect(() => {
     if (currentDoc.fileBytes) {
@@ -86,9 +94,25 @@ function AppContent() {
             await loadAnnotations(currentDoc.filePath);
           }
         })
-        .catch((err) => {
+        .catch((err: unknown) => {
           console.error("Failed to load PDF document:", err);
+
+          // Handle password-protected PDFs
+          if (err instanceof Error && err.name === "PasswordException") {
+            showToast("error", "This PDF is password-protected and cannot be opened");
+            closeFile();
+            return;
+          }
+
+          // Handle corrupted/invalid PDFs
+          if (err instanceof Error && err.name === "InvalidPDFException") {
+            showToast("error", "This file is not a valid PDF or is corrupted");
+            closeFile();
+            return;
+          }
+
           showToast("error", "Failed to load PDF document");
+          closeFile();
         });
     }
   }, [currentDoc.fileBytes]);

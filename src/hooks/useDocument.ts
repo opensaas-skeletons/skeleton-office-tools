@@ -15,6 +15,10 @@ interface DocumentState {
   fileBytes: Uint8Array | null;
 }
 
+/** Max file size (in bytes) that can reliably pass through Tauri JSON IPC.
+ *  Beyond this, the JSON array serialization becomes very slow. */
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+
 interface UseDocumentReturn {
   document: DocumentState;
   recentDocuments: RecentDocument[];
@@ -24,6 +28,7 @@ interface UseDocumentReturn {
   closeFile: () => void;
   clearRecents: () => Promise<void>;
   isLoading: boolean;
+  fileSizeWarning: string | null;
 }
 
 export function useDocument(): UseDocumentReturn {
@@ -34,6 +39,7 @@ export function useDocument(): UseDocumentReturn {
   });
   const [recentDocuments, setRecentDocuments] = useState<RecentDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [fileSizeWarning, setFileSizeWarning] = useState<string | null>(null);
 
   const loadRecentDocuments = async () => {
     try {
@@ -55,10 +61,18 @@ export function useDocument(): UseDocumentReturn {
 
   const openFilePath = useCallback(async (path: string) => {
     setIsLoading(true);
+    setFileSizeWarning(null);
     try {
       const bytes: number[] = await invoke("read_file_bytes", { path });
       const uint8 = new Uint8Array(bytes);
       const fileName = path.split(/[\\/]/).pop() || "unknown.pdf";
+
+      if (uint8.length > MAX_FILE_SIZE_BYTES) {
+        const sizeMB = (uint8.length / (1024 * 1024)).toFixed(1);
+        setFileSizeWarning(
+          `This file is ${sizeMB} MB. Files over 50 MB may be slow to load.`
+        );
+      }
 
       setDocument({
         filePath: path,
@@ -168,5 +182,6 @@ export function useDocument(): UseDocumentReturn {
     closeFile,
     clearRecents,
     isLoading,
+    fileSizeWarning,
   };
 }

@@ -27,6 +27,7 @@ interface UsePdfViewerReturn {
   resetZoom: () => void;
   setScale: (scale: number) => void;
   loadDocument: (bytes: Uint8Array) => Promise<number>;
+  error: string | null;
 }
 
 export function usePdfViewer(): UsePdfViewerReturn {
@@ -34,21 +35,36 @@ export function usePdfViewer(): UsePdfViewerReturn {
   const [pageCount, setPageCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [scale, setScaleState] = useState(PDF_DEFAULT_SCALE);
+  const [error, setError] = useState<string | null>(null);
   const renderTaskRef = useRef<Map<number, pdfjsLib.RenderTask>>(new Map());
+  const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    pdfDocRef.current = pdfDoc;
+  }, [pdfDoc]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       renderTaskRef.current.forEach((task) => task.cancel());
       renderTaskRef.current.clear();
+      pdfDocRef.current?.destroy();
     };
   }, []);
 
   const loadDocument = useCallback(async (bytes: Uint8Array): Promise<number> => {
-    // Destroy previous document
-    if (pdfDoc) {
-      await pdfDoc.destroy();
+    setError(null);
+
+    // Destroy previous document using ref to avoid stale closure
+    if (pdfDocRef.current) {
+      await pdfDocRef.current.destroy();
+      pdfDocRef.current = null;
     }
+
+    // Cancel all in-flight renders from the old document
+    renderTaskRef.current.forEach((task) => task.cancel());
+    renderTaskRef.current.clear();
 
     const loadingTask = pdfjsLib.getDocument({ data: bytes });
     const doc = await loadingTask.promise;
@@ -59,7 +75,7 @@ export function usePdfViewer(): UsePdfViewerReturn {
     setScaleState(PDF_DEFAULT_SCALE);
 
     return doc.numPages;
-  }, [pdfDoc]);
+  }, []);
 
   const renderPage = useCallback(
     async (pageNum: number, canvas: HTMLCanvasElement) => {
@@ -76,11 +92,17 @@ export function usePdfViewer(): UsePdfViewerReturn {
       const page = await pdfDoc.getPage(pageNum);
       const viewport = page.getViewport({ scale });
 
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+      // Account for high-DPI displays to render crisp text
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(viewport.width * dpr);
+      canvas.height = Math.floor(viewport.height * dpr);
+      canvas.style.width = `${viewport.width}px`;
+      canvas.style.height = `${viewport.height}px`;
 
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+
+      ctx.scale(dpr, dpr);
 
       const renderTask = page.render({
         canvasContext: ctx,
@@ -150,5 +172,6 @@ export function usePdfViewer(): UsePdfViewerReturn {
     resetZoom,
     setScale,
     loadDocument,
+    error,
   };
 }

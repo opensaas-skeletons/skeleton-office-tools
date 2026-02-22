@@ -14,6 +14,7 @@ pub fn run() {
             commands::documents::save_file_dialog,
             commands::documents::read_file_bytes,
             commands::documents::write_file_bytes,
+            commands::documents::write_file_bytes_raw,
             commands::documents::get_file_opened_with,
             commands::settings::get_app_data_dir,
         ])

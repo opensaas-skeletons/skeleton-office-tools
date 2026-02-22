@@ -76,14 +76,10 @@ export default function PdfPage({
         height: height * scale,
       }}
     >
-      {/* PDF Canvas */}
+      {/* PDF Canvas — actual dimensions are set by renderPage for high-DPI support */}
       <canvas
         ref={canvasRef}
         className="pdf-canvas block"
-        style={{
-          width: width * scale,
-          height: height * scale,
-        }}
       />
 
       {/* Annotation overlay layer */}

@@ -5,6 +5,18 @@ import type { Annotation } from "../../types/pdf";
 import type { Signature } from "../../types/signature";
 import { flattenPdf } from "../../services/pdf.service";
 
+/**
+ * Write binary data to a file using raw IPC, bypassing JSON serialization.
+ * This passes the Uint8Array as a raw request body with the file path in a
+ * header, avoiding the ~4x memory overhead of Array.from() + JSON encoding.
+ * Prevents OOM crashes for large PDFs (10+ MB).
+ */
+async function writeFileRaw(path: string, data: Uint8Array): Promise<void> {
+  await invoke("write_file_bytes_raw", data, {
+    headers: { "X-File-Path": path },
+  });
+}
+
 interface FlattenDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -56,10 +68,10 @@ export default function FlattenDialog({
       const targetPath = savePath.endsWith(".pdf") ? savePath : savePath + ".pdf";
 
       setProgress("Saving file...");
-      await invoke("write_file_bytes", {
-        path: targetPath,
-        data: Array.from(saveBytes),
-      });
+      // Use raw IPC to pass Uint8Array directly, avoiding JSON serialization
+      // of the entire byte array which causes ~4x memory overhead and OOM on
+      // large files. See write_file_bytes_raw in documents.rs.
+      await writeFileRaw(targetPath, saveBytes);
 
       setProgress("Done!");
       setTimeout(() => {

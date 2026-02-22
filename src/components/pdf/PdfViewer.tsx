@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 import type { Annotation, PdfMode } from "../../types/pdf";
 import type { Signature } from "../../types/signature";
 import PdfPage from "./PdfPage";
@@ -26,6 +26,9 @@ interface PdfViewerProps {
   onNewAnnotationHandled: () => void;
 }
 
+/** Number of pages to render above/below the visible area */
+const PAGE_BUFFER = 2;
+
 export default function PdfViewer({
   pageCount,
   currentPage,
@@ -44,6 +47,56 @@ export default function PdfViewer({
   onNewAnnotationHandled,
 }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [visiblePages, setVisiblePages] = useState<Set<number>>(new Set([1]));
+
+  // Use IntersectionObserver to track which pages are near the viewport
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || pageCount === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setVisiblePages((prev) => {
+          const next = new Set(prev);
+          for (const entry of entries) {
+            const pageNum = Number(
+              (entry.target as HTMLElement).dataset.pageNumber
+            );
+            if (!pageNum) continue;
+            if (entry.isIntersecting) {
+              next.add(pageNum);
+            } else {
+              next.delete(pageNum);
+            }
+          }
+          return next;
+        });
+      },
+      {
+        root: container,
+        // Extend the detection area so pages just outside the viewport get pre-rendered
+        rootMargin: "200% 0px",
+        threshold: 0,
+      }
+    );
+
+    // Observe all page placeholder elements
+    const pageEls = container.querySelectorAll("[data-page-number]");
+    pageEls.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [pageCount, scale]);
+
+  // Determine which pages should be fully rendered (visible + buffer)
+  const renderedPages = new Set<number>();
+  for (const p of visiblePages) {
+    for (let offset = -PAGE_BUFFER; offset <= PAGE_BUFFER; offset++) {
+      const page = p + offset;
+      if (page >= 1 && page <= pageCount) {
+        renderedPages.add(page);
+      }
+    }
+  }
 
   // Scroll to the target page when currentPage changes via toolbar navigation
   useEffect(() => {
@@ -80,6 +133,23 @@ export default function PdfViewer({
         {Array.from({ length: pageCount }, (_, i) => {
           const pageNum = i + 1;
           const dims = pageDimensions[i] ?? { width: 612, height: 792 };
+          const shouldRender = renderedPages.has(pageNum);
+
+          if (!shouldRender) {
+            // Placeholder that preserves scroll position and layout
+            return (
+              <div
+                key={pageNum}
+                data-page-number={pageNum}
+                className="mx-auto bg-white shadow-lg"
+                style={{
+                  width: dims.width * scale,
+                  height: dims.height * scale,
+                }}
+              />
+            );
+          }
+
           return (
             <PdfPage
               key={pageNum}

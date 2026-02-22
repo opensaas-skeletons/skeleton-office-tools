@@ -43,9 +43,37 @@ pub async fn read_file_bytes(path: String) -> Result<Vec<u8>, String> {
     fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))
 }
 
+/// Write file bytes via JSON-serialized data. Works for small files but
+/// incurs ~4x memory overhead due to JSON number-array encoding.
+/// For large files (>5 MB), prefer write_file_bytes_raw instead.
 #[tauri::command]
 pub async fn write_file_bytes(path: String, data: Vec<u8>) -> Result<(), String> {
     fs::write(&path, data).map_err(|e| format!("Failed to write file: {}", e))
+}
+
+/// Write file bytes using raw IPC body, bypassing JSON serialization.
+/// This avoids the ~4x memory overhead of encoding Uint8Array as a JSON
+/// number array, preventing OOM crashes on large PDFs (10+ MB).
+/// The file path is passed via the X-File-Path request header.
+#[tauri::command]
+pub async fn write_file_bytes_raw(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let path = request
+        .headers()
+        .get("X-File-Path")
+        .and_then(|v: &tauri::http::HeaderValue| v.to_str().ok())
+        .map(|s: &str| s.to_string())
+        .ok_or_else(|| "Missing X-File-Path header".to_string())?;
+
+    let data = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
+        tauri::ipc::InvokeBody::Json(value) => {
+            // Fallback: handle JSON-encoded byte arrays for backward compatibility
+            serde_json::from_value::<Vec<u8>>(value.clone())
+                .map_err(|e| format!("Failed to deserialize data: {}", e))?
+        }
+    };
+
+    fs::write(&path, &data).map_err(|e| format!("Failed to write file: {}", e))
 }
 
 #[tauri::command]
