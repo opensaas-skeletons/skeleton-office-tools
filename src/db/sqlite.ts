@@ -112,7 +112,7 @@ export async function saveSignature(
     "INSERT INTO signatures (name, font_family, color) VALUES ($1, $2, $3)",
     [name, fontFamily, color]
   );
-  return result.lastInsertId;
+  return result.lastInsertId ?? 0;
 }
 
 export async function getSignatures(): Promise<Array<{

@@ -1,14 +1,14 @@
 import { useEffect, useCallback, type ReactNode } from "react";
 
 interface ModalProps {
-  open: boolean;
+  isOpen: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   width?: string;
 }
 
-export default function Modal({ open, onClose, title, children, width = "max-w-lg" }: ModalProps) {
+export default function Modal({ isOpen, onClose, title, children, width = "max-w-lg" }: ModalProps) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -17,13 +17,13 @@ export default function Modal({ open, onClose, title, children, width = "max-w-l
   );
 
   useEffect(() => {
-    if (open) {
+    if (isOpen) {
       document.addEventListener("keydown", handleKeyDown);
       return () => document.removeEventListener("keydown", handleKeyDown);
     }
-  }, [open, handleKeyDown]);
+  }, [isOpen, handleKeyDown]);
 
-  if (!open) return null;
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">

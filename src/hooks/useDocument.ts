@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { addRecentDocument, getRecentDocuments } from "../db/sqlite";
+import { getRecentDocuments } from "../db/sqlite";
 import type { RecentDocument } from "../types/document";
 
 declare global {
@@ -112,7 +112,7 @@ export function useDocument(): UseDocumentReturn {
       try {
         await invoke("write_file_bytes", {
           path: savePath,
-          bytes: Array.from(bytes),
+          data: Array.from(bytes),
         });
       } catch (err) {
         console.error("Failed to save file:", err);
@@ -128,28 +128,6 @@ export function useDocument(): UseDocumentReturn {
       fileBytes: null,
     });
   }, []);
-
-  /**
-   * Called externally after pdf.js has loaded the document
-   * to record it in recent documents.
-   */
-  const recordRecentDocument = useCallback(
-    async (pageCount: number) => {
-      if (!document.filePath || !document.fileName || !document.fileBytes) return;
-      try {
-        await addRecentDocument(
-          document.filePath,
-          document.fileName,
-          document.fileBytes.byteLength,
-          pageCount
-        );
-        await loadRecentDocuments();
-      } catch (err) {
-        console.error("Failed to record recent document:", err);
-      }
-    },
-    [document.filePath, document.fileName, document.fileBytes]
-  );
 
   return {
     document,

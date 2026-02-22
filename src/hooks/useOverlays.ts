@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import type {
   Annotation,
   TextAnnotation,
@@ -8,7 +8,6 @@ import type {
 import {
   saveAnnotation,
   getAnnotationsForDocument,
-  deleteAnnotation,
 } from "../db/sqlite";
 import { TEXT_DEFAULT_FONT_SIZE } from "../constants";
 

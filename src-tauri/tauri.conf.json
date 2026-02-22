@@ -20,7 +20,7 @@
         "minHeight": 600,
         "center": true,
         "resizable": true,
-        "fileDropEnabled": true
+        "dragDropEnabled": true
       }
     ],
     "security": {

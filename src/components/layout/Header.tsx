@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { APP_NAME } from "../../constants";
 
 interface HeaderProps {

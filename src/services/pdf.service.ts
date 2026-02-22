@@ -62,7 +62,7 @@ export async function flattenPdf(
     if (pageIndex < 0 || pageIndex >= pages.length) continue;
 
     const page = pages[pageIndex];
-    const { width: pageWidth, height: pageHeight } = page.getSize();
+    const { height: pageHeight } = page.getSize();
 
     if (isTextAnnotation(annotation)) {
       const textAnn = annotation as TextAnnotation;
