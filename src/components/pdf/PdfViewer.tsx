@@ -135,40 +135,36 @@ export default function PdfViewer({
           const dims = pageDimensions[i] ?? { width: 612, height: 792 };
           const shouldRender = renderedPages.has(pageNum);
 
-          if (!shouldRender) {
-            // Placeholder that preserves scroll position and layout
-            return (
-              <div
-                key={pageNum}
-                data-page-number={pageNum}
-                className="mx-auto bg-white shadow-lg"
-                style={{
-                  width: dims.width * scale,
-                  height: dims.height * scale,
-                }}
-              />
-            );
-          }
-
+          // Stable wrapper div — always the same DOM element so
+          // IntersectionObserver can track it across render/placeholder swaps.
           return (
-            <PdfPage
+            <div
               key={pageNum}
-              pageNumber={pageNum}
-              scale={scale}
-              width={dims.width}
-              height={dims.height}
-              renderPage={renderPage}
-              annotations={annotations}
-              signatures={signatures}
-              selectedAnnotationId={selectedAnnotationId}
-              newAnnotationId={newAnnotationId}
-              mode={mode}
-              onSelectAnnotation={onSelectAnnotation}
-              onUpdateAnnotation={onUpdateAnnotation}
-              onDeleteAnnotation={onDeleteAnnotation}
-              onPageClick={onPageClick}
-              onNewAnnotationHandled={onNewAnnotationHandled}
-            />
+              data-page-number={pageNum}
+              className="relative mx-auto bg-white shadow-lg"
+              style={{
+                width: dims.width * scale,
+                height: dims.height * scale,
+              }}
+            >
+              {shouldRender && (
+                <PdfPage
+                  pageNumber={pageNum}
+                  scale={scale}
+                  renderPage={renderPage}
+                  annotations={annotations}
+                  signatures={signatures}
+                  selectedAnnotationId={selectedAnnotationId}
+                  newAnnotationId={newAnnotationId}
+                  mode={mode}
+                  onSelectAnnotation={onSelectAnnotation}
+                  onUpdateAnnotation={onUpdateAnnotation}
+                  onDeleteAnnotation={onDeleteAnnotation}
+                  onPageClick={onPageClick}
+                  onNewAnnotationHandled={onNewAnnotationHandled}
+                />
+              )}
+            </div>
           );
         })}
       </div>

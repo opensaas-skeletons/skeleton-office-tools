@@ -23,7 +23,7 @@ export default function ToolSelector({ recentDocuments, onOpenFile, onOpenRecent
       </div>
 
       {/* Tool Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl w-full mb-10">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl w-full mb-10">
         {TOOLS.map((tool) => (
           <button
             key={tool.id}
@@ -103,7 +103,7 @@ export default function ToolSelector({ recentDocuments, onOpenFile, onOpenRecent
 
       {/* Drop hint */}
       <p className="text-xs text-slate-400 mt-8">
-        or drag and drop a PDF file anywhere
+        or drag and drop a file anywhere
       </p>
     </div>
   );

@@ -9,6 +9,8 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_sql::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::documents::open_file_dialog,
             commands::documents::save_file_dialog,
@@ -23,11 +25,14 @@ pub fn run() {
             let args: Vec<String> = std::env::args().collect();
             if args.len() > 1 {
                 let file_path = args[1].clone();
-                let window = app.get_webview_window("main").unwrap();
-                window.eval(&format!(
-                    "window.__OPENED_FILE__ = {};",
-                    serde_json::to_string(&file_path).unwrap()
-                )).ok();
+                if let Some(window) = app.get_webview_window("main") {
+                    if let Ok(json) = serde_json::to_string(&file_path) {
+                        let _ = window.eval(&format!(
+                            "window.__OPENED_FILE__ = {};",
+                            json
+                        ));
+                    }
+                }
             }
             Ok(())
         })

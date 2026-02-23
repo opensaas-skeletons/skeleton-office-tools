@@ -18,12 +18,21 @@ jobs:
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             args: ""
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            args: ""
 
     runs-on: ${{ matrix.platform }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -48,19 +57,25 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Office Tools ${{ github.ref_name }}"
           releaseBody: |
             ## Download
 
-            Download the Windows installer below (`.exe` file).
+            | Platform | File |
+            |----------|------|
+            | Windows  | `.exe` installer |
+            | Linux    | `.deb` / `.AppImage` |
 
             ### What's included
             - PDF viewer with zoom and page navigation
+            - Word document editor with rich text formatting
             - Text overlay and signature tools
             - Flatten & save to standards-compliant PDF
-            - Registers as .pdf file handler in Windows
+            - Auto-update notifications
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import type {
   Annotation,
   TextAnnotation,
@@ -11,6 +11,8 @@ import {
 import {
   saveAnnotation,
   getAnnotationsForDocument,
+  deleteAnnotation as deleteAnnotationFromDb,
+  deleteAnnotationsForDocument,
 } from "../db/sqlite";
 import { TEXT_DEFAULT_FONT_SIZE } from "../constants";
 
@@ -44,6 +46,8 @@ export function useOverlays(): UseOverlaysReturn {
   const [mode, setMode] = useState<PdfMode>("view");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newAnnotationId, setNewAnnotationId] = useState<string | null>(null);
+  const annotationsRef = useRef<Annotation[]>(annotations);
+  annotationsRef.current = annotations;
 
   const clearNewAnnotationId = useCallback(() => {
     setNewAnnotationId(null);
@@ -122,6 +126,7 @@ export function useOverlays(): UseOverlaysReturn {
       };
       setAnnotations((prev) => [...prev, annotation]);
       setSelectedId(annotation.id);
+      setNewAnnotationId(annotation.id);
       return annotation;
     },
     []
@@ -136,18 +141,26 @@ export function useOverlays(): UseOverlaysReturn {
     []
   );
 
-  const removeAnnotation = useCallback(
-    (id: string) => {
-      setAnnotations((prev) => prev.filter((a) => a.id !== id));
-      setSelectedId((prev) => (prev === id ? null : prev));
-    },
-    []
-  );
+  const removeAnnotation = useCallback(async (id: string) => {
+    try {
+      await deleteAnnotationFromDb(id);
+    } catch {
+      // May not exist in DB yet if not saved
+    }
+    setAnnotations((prev) => prev.filter((a) => a.id !== id));
+    setSelectedId((prev) => (prev === id ? null : prev));
+  }, []);
 
   const saveAllAnnotations = useCallback(
     async (documentPath: string) => {
+      // Read from ref to always get the latest annotations,
+      // avoiding stale closure when this callback is captured elsewhere.
+      const current = annotationsRef.current;
       try {
-        for (const ann of annotations) {
+        // Delete existing annotations for this document, then re-insert all
+        await deleteAnnotationsForDocument(documentPath);
+
+        for (const ann of current) {
           if (isTextAnnotation(ann)) {
             const textAnn = ann as TextAnnotation;
             await saveAnnotation({
@@ -182,7 +195,7 @@ export function useOverlays(): UseOverlaysReturn {
         console.error("Failed to save annotations:", err);
       }
     },
-    [annotations]
+    []
   );
 
   return {

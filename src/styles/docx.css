@@ -1,0 +1,36 @@
+/* docx-preview rendered output styling */
+.docx-container {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Page wrapper — docx-preview wraps each page in a section with class "docx" */
+.docx-container .docx-wrapper {
+  background: transparent !important;
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.docx-container .docx-wrapper > section.docx {
+  background: white !important;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* Table styling defaults */
+.docx-container table {
+  border-collapse: collapse;
+}
+
+.docx-container td,
+.docx-container th {
+  border: 1px solid #d1d5db;
+  padding: 4px 8px;
+}

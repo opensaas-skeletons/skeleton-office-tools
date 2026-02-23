@@ -38,11 +38,15 @@ export function usePdfViewer(): UsePdfViewerReturn {
   const [error, setError] = useState<string | null>(null);
   const renderTaskRef = useRef<Map<number, pdfjsLib.RenderTask>>(new Map());
   const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
+  const scaleRef = useRef(PDF_DEFAULT_SCALE);
 
-  // Keep ref in sync with state
+  // Keep refs in sync with state
   useEffect(() => {
     pdfDocRef.current = pdfDoc;
   }, [pdfDoc]);
+  useEffect(() => {
+    scaleRef.current = scale;
+  }, [scale]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -66,9 +70,13 @@ export function usePdfViewer(): UsePdfViewerReturn {
     renderTaskRef.current.forEach((task) => task.cancel());
     renderTaskRef.current.clear();
 
-    const loadingTask = pdfjsLib.getDocument({ data: bytes });
+    // Copy the bytes — pdf.js transfers the ArrayBuffer to its web worker,
+    // which neuters the original Uint8Array (byteLength becomes 0).
+    // The caller keeps the original for later use (e.g. flatten/save).
+    const loadingTask = pdfjsLib.getDocument({ data: bytes.slice() });
     const doc = await loadingTask.promise;
 
+    pdfDocRef.current = doc;
     setPdfDoc(doc);
     setPageCount(doc.numPages);
     setCurrentPage(1);
@@ -77,10 +85,15 @@ export function usePdfViewer(): UsePdfViewerReturn {
     return doc.numPages;
   }, []);
 
+  // Use pdfDocRef inside renderPage to avoid stale closures — the callback
+  // identity changes only when scale changes (to trigger re-renders in
+  // PdfPage). Scale is read from the closure (not ref) to avoid stale
+  // values caused by effect ordering (child effects fire before parent).
   const renderPage = useCallback(
     async (pageNum: number, canvas: HTMLCanvasElement) => {
-      if (!pdfDoc) return;
-      if (pageNum < 1 || pageNum > pdfDoc.numPages) return;
+      const doc = pdfDocRef.current;
+      if (!doc) return;
+      if (pageNum < 1 || pageNum > doc.numPages) return;
 
       // Cancel any ongoing render for this page
       const existing = renderTaskRef.current.get(pageNum);
@@ -89,7 +102,7 @@ export function usePdfViewer(): UsePdfViewerReturn {
         renderTaskRef.current.delete(pageNum);
       }
 
-      const page = await pdfDoc.getPage(pageNum);
+      const page = await doc.getPage(pageNum);
       const viewport = page.getViewport({ scale });
 
       // Account for high-DPI displays to render crisp text
@@ -121,7 +134,9 @@ export function usePdfViewer(): UsePdfViewerReturn {
         renderTaskRef.current.delete(pageNum);
       }
     },
-    [pdfDoc, scale]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reads from refs;
+    // scale is included only so PdfPage re-triggers its effect on zoom change
+    [scale]
   );
 
   const nextPage = useCallback(() => {

@@ -89,7 +89,7 @@ export default function Sidebar({
                       {doc.fileName}
                     </p>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      {formatDate(doc.lastOpened)}
+                      {formatDate(doc.lastOpened)} &middot; {formatSize(doc.fileSize)}
                     </p>
                   </div>
                 </button>
@@ -107,13 +107,24 @@ function formatDate(dateStr: string): string {
     const date = new Date(dateStr);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffMin = Math.floor(diffMs / (1000 * 60));
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHr / 24);
 
-    if (diffDays === 0) return "Today";
+    if (diffMin < 1) return "just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr < 24) return `${diffHr}h ago`;
     if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString();
   } catch {
     return dateStr;
   }
+}
+
+function formatSize(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

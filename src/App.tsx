@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { getSetting } from "./db/sqlite";
 import { useDocument } from "./hooks/useDocument";
 import { usePdfViewer } from "./hooks/usePdfViewer";
+import { useWordEditor } from "./hooks/useWordEditor";
 import { useSignatures } from "./hooks/useSignatures";
+import { useUpdater } from "./hooks/useUpdater";
 import { useOverlays } from "./hooks/useOverlays";
 import { ToastProvider, useToast } from "./components/common/Toast";
 import Header from "./components/layout/Header";
@@ -12,8 +14,17 @@ import PdfToolbar from "./components/pdf/PdfToolbar";
 import PdfViewer from "./components/pdf/PdfViewer";
 import FlattenDialog from "./components/pdf/FlattenDialog";
 import SignaturePad from "./components/pdf/SignaturePad";
+import WordEditorToolbar from "./components/word/WordEditorToolbar";
+import WordEditor from "./components/word/WordEditor";
+import PlaceholderViewer from "./components/common/PlaceholderViewer";
+import UpdateBanner from "./components/common/UpdateBanner";
 import FileDropZone from "./components/common/FileDropZone";
 import Walkthrough from "./components/onboarding/Walkthrough";
+import { createBlankWordDocument } from "./utils/newDocument";
+import { docxToHtml } from "./utils/docxImport";
+import { htmlToDocx } from "./utils/docxExport";
+import { invoke } from "@tauri-apps/api/core";
+import "./styles/docx.css";
 
 function AppContent() {
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
@@ -25,11 +36,14 @@ function AppContent() {
   >([]);
 
   const { showToast } = useToast();
+  const updater = useUpdater();
   const {
     document: currentDoc,
     recentDocuments,
     openFile,
     openFilePath,
+    openNew,
+    updateDocumentPath,
     closeFile,
     clearRecents,
     fileSizeWarning,
@@ -42,8 +56,13 @@ function AppContent() {
     renderPage,
     goToPage,
     setScale,
-    loadDocument,
+    loadDocument: loadPdf,
   } = usePdfViewer();
+  const {
+    editor: wordEditor,
+    isReady: wordEditorReady,
+    loadHtmlContent: loadWordHtml,
+  } = useWordEditor();
   const { signatures, addSignature } = useSignatures();
   const {
     annotations,
@@ -73,23 +92,21 @@ function AppContent() {
     if (fileSizeWarning) {
       showToast("info", fileSizeWarning);
     }
-  }, [fileSizeWarning]);
+  }, [fileSizeWarning, showToast]);
 
-  // Load PDF when file bytes change
+  // Load document when file bytes change — route by file type
   useEffect(() => {
-    if (currentDoc.fileBytes) {
-      loadDocument(currentDoc.fileBytes)
+    if (!currentDoc.fileBytes) return;
+
+    if (currentDoc.fileType === "pdf") {
+      loadPdf(currentDoc.fileBytes)
         .then(async (numPages) => {
-          // Get page dimensions
           const dims: Array<{ width: number; height: number }> = [];
-          // We get dimensions from the first render pass
-          // For now use standard letter size, the actual size is set by the canvas
           for (let i = 0; i < numPages; i++) {
             dims.push({ width: 612, height: 792 });
           }
           setPageDimensions(dims);
 
-          // Load saved annotations for this document
           if (currentDoc.filePath) {
             await loadAnnotations(currentDoc.filePath);
           }
@@ -97,14 +114,12 @@ function AppContent() {
         .catch((err: unknown) => {
           console.error("Failed to load PDF document:", err);
 
-          // Handle password-protected PDFs
           if (err instanceof Error && err.name === "PasswordException") {
             showToast("error", "This PDF is password-protected and cannot be opened");
             closeFile();
             return;
           }
 
-          // Handle corrupted/invalid PDFs
           if (err instanceof Error && err.name === "InvalidPDFException") {
             showToast("error", "This file is not a valid PDF or is corrupted");
             closeFile();
@@ -114,8 +129,18 @@ function AppContent() {
           showToast("error", "Failed to load PDF document");
           closeFile();
         });
+    } else if (currentDoc.fileType === "word") {
+      docxToHtml(currentDoc.fileBytes)
+        .then((html) => {
+          loadWordHtml(html);
+        })
+        .catch((err: unknown) => {
+          console.error("Failed to load Word document:", err);
+          showToast("error", "Failed to load Word document");
+        });
     }
-  }, [currentDoc.fileBytes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stable callbacks; re-run on file change
+  }, [currentDoc.fileBytes, currentDoc.fileType]);
 
   // Get actual page dimensions from pdf.js
   useEffect(() => {
@@ -169,12 +194,69 @@ function AppContent() {
   }, [closeFile, setMode, setSelectedId]);
 
   const handleSaveFile = useCallback(async () => {
-    if (currentDoc.fileBytes && currentDoc.filePath) {
-      // Save annotations to SQLite
+    if (currentDoc.fileType === "pdf" && currentDoc.fileBytes && currentDoc.filePath) {
       await saveAllAnnotations(currentDoc.filePath);
       showToast("success", "Annotations saved");
+    } else if (currentDoc.fileType === "word" && wordEditor) {
+      try {
+        const html = wordEditor.getHTML();
+        const docxBytes = await htmlToDocx(html);
+        let savePath = currentDoc.filePath;
+        if (!savePath) {
+          const selected: string | null = await invoke("save_file_dialog", {
+            defaultName: currentDoc.fileName || "Untitled.docx",
+          });
+          if (!selected) return;
+          savePath = selected;
+        }
+        await invoke("write_file_bytes", { path: savePath, data: Array.from(docxBytes) });
+        // Update document state so the header title reflects the saved name
+        // and subsequent Ctrl+S saves silently to the same path.
+        if (savePath !== currentDoc.filePath) {
+          const savedFileName = savePath.split(/[\\/]/).pop() || "Untitled.docx";
+          updateDocumentPath(savePath, savedFileName);
+        }
+        showToast("success", "Word document saved");
+      } catch (err) {
+        console.error("Failed to save Word document:", err);
+        showToast("error", "Failed to save Word document");
+      }
     }
-  }, [currentDoc.fileBytes, currentDoc.filePath, saveAllAnnotations, showToast]);
+  }, [currentDoc.fileType, currentDoc.fileBytes, currentDoc.filePath, currentDoc.fileName, wordEditor, saveAllAnnotations, updateDocumentPath, showToast]);
+
+  const handleNewWordDocument = useCallback(async () => {
+    try {
+      const bytes = await createBlankWordDocument();
+      openNew(bytes, "Untitled.docx", "word");
+    } catch (err) {
+      console.error("Failed to create Word document:", err);
+      showToast("error", "Failed to create Word document");
+    }
+  }, [openNew, showToast]);
+
+  const handleInsertImage = useCallback(async () => {
+    if (!wordEditor) return;
+    try {
+      const selected: string | null = await invoke("open_file_dialog");
+      if (!selected) return;
+      const bytes: number[] = await invoke("read_file_bytes", { path: selected });
+      const uint8 = new Uint8Array(bytes);
+      const ext = selected.split(".").pop()?.toLowerCase() || "png";
+      const mimeMap: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", webp: "image/webp" };
+      const mime = mimeMap[ext] || "image/png";
+      let binary = "";
+      for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
+      const base64 = btoa(binary);
+      wordEditor.chain().focus().setImage({ src: `data:${mime};base64,${base64}` }).run();
+    } catch (err) {
+      console.error("Failed to insert image:", err);
+      showToast("error", "Failed to insert image");
+    }
+  }, [wordEditor, showToast]);
+
+  const handlePrint = useCallback(() => {
+    window.print();
+  }, []);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -217,14 +299,109 @@ function AppContent() {
 
   const hasDocument = currentDoc.fileBytes !== null;
 
+  const renderDocumentViewer = () => {
+    switch (currentDoc.fileType) {
+      case "pdf":
+        return (
+          <>
+            <PdfToolbar
+              currentPage={currentPage}
+              pageCount={pageCount}
+              scale={scale}
+              mode={mode}
+              onPageChange={goToPage}
+              onScaleChange={setScale}
+              onModeChange={setMode}
+              onFlattenClick={() => setShowFlattenDialog(true)}
+              onCreateSignature={() => setShowSignaturePad(true)}
+              annotationCount={annotations.length}
+              signatureCount={signatures.length}
+            />
+            <PdfViewer
+              pageCount={pageCount}
+              currentPage={currentPage}
+              scale={scale}
+              mode={mode}
+              annotations={annotations}
+              signatures={signatures}
+              selectedAnnotationId={selectedId}
+              newAnnotationId={newAnnotationId}
+              pageDimensions={pageDimensions}
+              renderPage={renderPage}
+              onSelectAnnotation={(id) => setSelectedId(id)}
+              onUpdateAnnotation={updateAnnotation}
+              onDeleteAnnotation={removeAnnotation}
+              onPageClick={handlePageClick}
+              onNewAnnotationHandled={clearNewAnnotationId}
+            />
+          </>
+        );
+      case "word":
+        return (
+          <>
+            <WordEditorToolbar
+              editor={wordEditor}
+              fileName={currentDoc.fileName}
+              onInsertImage={handleInsertImage}
+              onPrint={handlePrint}
+            />
+            <WordEditor
+              editor={wordEditor}
+              isReady={wordEditorReady}
+            />
+          </>
+        );
+      case "excel":
+        return (
+          <PlaceholderViewer
+            icon="📊"
+            title="Excel Viewer"
+            description="Spreadsheet viewing and editing is coming in a future update."
+            fileName={currentDoc.fileName}
+          />
+        );
+      case "powerpoint":
+        return (
+          <PlaceholderViewer
+            icon="📽️"
+            title="PowerPoint Viewer"
+            description="Presentation viewing is coming in a future update."
+            fileName={currentDoc.fileName}
+          />
+        );
+      default:
+        return (
+          <PlaceholderViewer
+            icon="📄"
+            title="Unsupported Format"
+            description="This file type is not yet supported."
+            fileName={currentDoc.fileName}
+          />
+        );
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       <Header
         fileName={currentDoc.fileName}
         onOpenFile={openFile}
+        onNewWordDocument={handleNewWordDocument}
         onSaveFile={handleSaveFile}
         onCloseFile={handleCloseFile}
         hasDocument={hasDocument}
+        onCheckForUpdates={updater.checkForUpdate}
+      />
+
+      <UpdateBanner
+        status={updater.status}
+        progress={updater.progress}
+        version={updater.version}
+        error={updater.error}
+        onDownload={updater.downloadAndInstall}
+        onRestart={updater.restartApp}
+        onDismiss={updater.dismiss}
+        onRetry={updater.checkForUpdate}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -237,40 +414,7 @@ function AppContent() {
         />
 
         <div className="flex-1 flex flex-col overflow-hidden">
-          {hasDocument ? (
-            <>
-              <PdfToolbar
-                currentPage={currentPage}
-                pageCount={pageCount}
-                scale={scale}
-                mode={mode}
-                onPageChange={goToPage}
-                onScaleChange={setScale}
-                onModeChange={setMode}
-                onFlattenClick={() => setShowFlattenDialog(true)}
-                onCreateSignature={() => setShowSignaturePad(true)}
-                annotationCount={annotations.length}
-                signatureCount={signatures.length}
-              />
-              <PdfViewer
-                pageCount={pageCount}
-                currentPage={currentPage}
-                scale={scale}
-                mode={mode}
-                annotations={annotations}
-                signatures={signatures}
-                selectedAnnotationId={selectedId}
-                newAnnotationId={newAnnotationId}
-                pageDimensions={pageDimensions}
-                renderPage={renderPage}
-                onSelectAnnotation={(id) => setSelectedId(id)}
-                onUpdateAnnotation={updateAnnotation}
-                onDeleteAnnotation={removeAnnotation}
-                onPageClick={handlePageClick}
-                onNewAnnotationHandled={clearNewAnnotationId}
-              />
-            </>
-          ) : (
+          {hasDocument ? renderDocumentViewer() : (
             <ToolSelector
               recentDocuments={recentDocuments}
               onOpenFile={openFile}

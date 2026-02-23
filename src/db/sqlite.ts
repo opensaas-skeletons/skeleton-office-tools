@@ -7,23 +7,26 @@ import {
 } from "@skeleton-database/embedded";
 import { DB_NAME } from "../constants";
 
-let initialized = false;
+let initPromise: Promise<void> | null = null;
 
 /**
  * Initialize the database: set up the embedded library adapter,
  * run skeleton-database migrations, then create app-specific tables.
+ * Uses a shared promise so concurrent callers wait on the same init.
  */
-export async function initDatabase(): Promise<void> {
-  if (initialized) return;
+export function initDatabase(): Promise<void> {
+  if (!initPromise) {
+    initPromise = doInit();
+  }
+  return initPromise;
+}
 
+async function doInit(): Promise<void> {
   const db = await Database.load(DB_NAME);
-  await db.execute("PRAGMA foreign_keys = ON", []);
 
   initialize(new TauriSqlAdapter(db));
   await runMigrations();
   await runAppMigrations();
-
-  initialized = true;
 }
 
 /**

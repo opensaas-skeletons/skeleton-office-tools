@@ -19,10 +19,10 @@ export const TOOLS: Tool[] = [
   {
     id: "word",
     name: "Word Viewer",
-    description: "View and edit Word documents",
+    description: "View Word documents with full formatting",
     icon: "📝",
     extensions: ["docx", "doc"],
-    available: false,
+    available: true,
   },
   {
     id: "excel",
@@ -30,6 +30,14 @@ export const TOOLS: Tool[] = [
     description: "View and edit spreadsheets",
     icon: "📊",
     extensions: ["xlsx", "xls", "csv"],
+    available: false,
+  },
+  {
+    id: "powerpoint",
+    name: "PowerPoint Viewer",
+    description: "View presentations and slide decks",
+    icon: "📽️",
+    extensions: ["pptx", "ppt"],
     available: false,
   },
 ];

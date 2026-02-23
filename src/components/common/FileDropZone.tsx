@@ -25,7 +25,9 @@ export default function FileDropZone({ onFileDrop }: FileDropZoneProps) {
           const paths = payload.paths;
           if (paths && paths.length > 0) {
             const filePath = paths[0];
-            if (filePath.toLowerCase().endsWith(".pdf")) {
+            const ext = filePath.toLowerCase();
+            const supported = [".pdf", ".docx", ".doc", ".xlsx", ".xls", ".csv", ".pptx", ".ppt"];
+            if (supported.some((e) => ext.endsWith(e))) {
               onFileDrop(filePath);
             }
           }
@@ -74,7 +76,7 @@ export default function FileDropZone({ onFileDrop }: FileDropZoneProps) {
           <line x1="12" y1="3" x2="12" y2="15" />
         </svg>
         <div className="text-center">
-          <p className="text-xl font-semibold text-slate-800">Drop PDF here</p>
+          <p className="text-xl font-semibold text-slate-800">Drop file here</p>
           <p className="text-sm text-slate-500 mt-1">Release to open your document</p>
         </div>
       </div>

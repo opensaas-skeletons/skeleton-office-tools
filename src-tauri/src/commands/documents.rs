@@ -6,7 +6,11 @@ pub async fn open_file_dialog(app: tauri::AppHandle) -> Result<Option<String>, S
     let file = app
         .dialog()
         .file()
+        .add_filter("Office Documents", &["pdf", "docx", "doc", "xlsx", "xls", "csv", "pptx", "ppt"])
         .add_filter("PDF Files", &["pdf"])
+        .add_filter("Word Documents", &["docx", "doc"])
+        .add_filter("Excel Spreadsheets", &["xlsx", "xls", "csv"])
+        .add_filter("PowerPoint Presentations", &["pptx", "ppt"])
         .add_filter("All Files", &["*"])
         .blocking_pick_file();
 
@@ -24,6 +28,7 @@ pub async fn save_file_dialog(
     let mut builder = app
         .dialog()
         .file()
+        .add_filter("Word Documents", &["docx"])
         .add_filter("PDF Files", &["pdf"]);
 
     if let Some(name) = default_name {
@@ -33,7 +38,15 @@ pub async fn save_file_dialog(
     let file = builder.blocking_save_file();
 
     match file {
-        Some(path) => Ok(Some(path.to_string())),
+        Some(path) => {
+            let mut path_str = path.to_string();
+            // Windows native save dialog may not append the extension from the
+            // filter, so enforce .docx when the user picked "Word Documents".
+            if !path_str.ends_with(".docx") && !path_str.ends_with(".pdf") {
+                path_str.push_str(".docx");
+            }
+            Ok(Some(path_str))
+        }
         None => Ok(None),
     }
 }

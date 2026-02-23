@@ -8,8 +8,6 @@ import SignatureOverlay from "./SignatureOverlay";
 interface PdfPageProps {
   pageNumber: number;
   scale: number;
-  width: number;
-  height: number;
   renderPage: (pageNumber: number, canvas: HTMLCanvasElement) => void;
   annotations: Annotation[];
   signatures: Signature[];
@@ -23,11 +21,15 @@ interface PdfPageProps {
   onNewAnnotationHandled: () => void;
 }
 
+/**
+ * Renders a single PDF page canvas + annotation overlays.
+ * The parent (PdfViewer) provides a stable wrapper div for sizing and
+ * IntersectionObserver tracking — this component only handles the
+ * canvas and overlays.
+ */
 export default function PdfPage({
   pageNumber,
   scale,
-  width,
-  height,
   renderPage,
   annotations,
   signatures,
@@ -41,17 +43,15 @@ export default function PdfPage({
   onNewAnnotationHandled,
 }: PdfPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (canvasRef.current) {
       renderPage(pageNumber, canvasRef.current);
     }
-  }, [pageNumber, renderPage]);
+  }, [pageNumber, scale, renderPage]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      // Only trigger if clicking the overlay layer itself, not an annotation
       if (e.target === e.currentTarget && mode !== "view") {
         const rect = e.currentTarget.getBoundingClientRect();
         const x = (e.clientX - rect.left) / scale;
@@ -67,20 +67,8 @@ export default function PdfPage({
   const pageAnnotations = annotations.filter((a) => a.pageNumber === pageNumber);
 
   return (
-    <div
-      ref={containerRef}
-      data-page-number={pageNumber}
-      className="relative mx-auto shadow-lg bg-white"
-      style={{
-        width: width * scale,
-        height: height * scale,
-      }}
-    >
-      {/* PDF Canvas — actual dimensions are set by renderPage for high-DPI support */}
-      <canvas
-        ref={canvasRef}
-        className="pdf-canvas block"
-      />
+    <>
+      <canvas ref={canvasRef} className="pdf-canvas block" />
 
       {/* Annotation overlay layer */}
       <div
@@ -128,6 +116,6 @@ export default function PdfPage({
           return null;
         })}
       </div>
-    </div>
+    </>
   );
 }

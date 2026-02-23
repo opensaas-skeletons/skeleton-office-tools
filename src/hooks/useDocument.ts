@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getRecentDocuments, addRecentDocument, clearRecentDocuments } from "../db/sqlite";
-import type { RecentDocument } from "../types/document";
+import type { RecentDocument, FileType } from "../types/document";
+import { detectFileType } from "../types/document";
 
 declare global {
   interface Window {
@@ -13,6 +14,7 @@ interface DocumentState {
   filePath: string | null;
   fileName: string | null;
   fileBytes: Uint8Array | null;
+  fileType: FileType;
 }
 
 /** Max file size (in bytes) that can reliably pass through Tauri JSON IPC.
@@ -24,7 +26,9 @@ interface UseDocumentReturn {
   recentDocuments: RecentDocument[];
   openFile: () => Promise<void>;
   openFilePath: (path: string) => Promise<void>;
+  openNew: (bytes: Uint8Array, fileName: string, fileType: FileType) => void;
   saveFile: (bytes: Uint8Array, path?: string) => Promise<void>;
+  updateDocumentPath: (filePath: string, fileName: string) => void;
   closeFile: () => void;
   clearRecents: () => Promise<void>;
   isLoading: boolean;
@@ -36,6 +40,7 @@ export function useDocument(): UseDocumentReturn {
     filePath: null,
     fileName: null,
     fileBytes: null,
+    fileType: "unknown",
   });
   const [recentDocuments, setRecentDocuments] = useState<RecentDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -78,6 +83,7 @@ export function useDocument(): UseDocumentReturn {
         filePath: path,
         fileName,
         fileBytes: uint8,
+        fileType: detectFileType(fileName),
       });
 
       // Record in recent documents
@@ -130,11 +136,20 @@ export function useDocument(): UseDocumentReturn {
     [document.filePath]
   );
 
+  const openNew = useCallback((bytes: Uint8Array, fileName: string, fileType: FileType) => {
+    setDocument({ filePath: null, fileName, fileBytes: bytes, fileType });
+  }, []);
+
+  const updateDocumentPath = useCallback((filePath: string, fileName: string) => {
+    setDocument((prev) => ({ ...prev, filePath, fileName }));
+  }, []);
+
   const closeFile = useCallback(() => {
     setDocument({
       filePath: null,
       fileName: null,
       fileBytes: null,
+      fileType: "unknown",
     });
   }, []);
 
@@ -178,7 +193,9 @@ export function useDocument(): UseDocumentReturn {
     recentDocuments,
     openFile,
     openFilePath,
+    openNew,
     saveFile,
+    updateDocumentPath,
     closeFile,
     clearRecents,
     isLoading,

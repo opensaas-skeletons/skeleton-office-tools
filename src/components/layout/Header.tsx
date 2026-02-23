@@ -1,18 +1,26 @@
 import { useState, useRef, useEffect } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { APP_NAME } from "../../constants";
 
 interface HeaderProps {
   fileName: string | null;
   onOpenFile: () => void;
+  onNewWordDocument: () => void;
   onSaveFile: () => void;
   onCloseFile: () => void;
   hasDocument: boolean;
+  onCheckForUpdates?: () => void;
 }
 
-export default function Header({ fileName, onOpenFile, onSaveFile, onCloseFile, hasDocument }: HeaderProps) {
+export default function Header({ fileName, onOpenFile, onNewWordDocument, onSaveFile, onCloseFile, hasDocument, onCheckForUpdates }: HeaderProps) {
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const [helpMenuOpen, setHelpMenuOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [appVersion, setAppVersion] = useState("0.0.0");
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => {});
+  }, []);
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const helpMenuRef = useRef<HTMLDivElement>(null);
 
@@ -56,7 +64,12 @@ export default function Header({ fileName, onOpenFile, onSaveFile, onCloseFile, 
             {fileMenuOpen && (
               <div className="absolute top-full left-0 mt-0.5 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50">
                 <MenuItem
-                  label="Open PDF..."
+                  label="New Word Document"
+                  onClick={() => { onNewWordDocument(); setFileMenuOpen(false); }}
+                />
+                <div className="my-1 border-t border-slate-100" />
+                <MenuItem
+                  label="Open..."
                   shortcut="Ctrl+O"
                   onClick={() => { onOpenFile(); setFileMenuOpen(false); }}
                 />
@@ -86,6 +99,11 @@ export default function Header({ fileName, onOpenFile, onSaveFile, onCloseFile, 
             </button>
             {helpMenuOpen && (
               <div className="absolute top-full left-0 mt-0.5 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50">
+                <MenuItem
+                  label="Check for Updates..."
+                  onClick={() => { onCheckForUpdates?.(); setHelpMenuOpen(false); }}
+                />
+                <div className="my-1 border-t border-slate-100" />
                 <MenuItem
                   label="About"
                   onClick={() => { setAboutOpen(true); setHelpMenuOpen(false); }}
@@ -120,7 +138,7 @@ export default function Header({ fileName, onOpenFile, onSaveFile, onCloseFile, 
               </svg>
             </div>
             <h3 className="text-lg font-semibold text-slate-800">{APP_NAME}</h3>
-            <p className="text-sm text-slate-500 mt-1">Version 1.0.0</p>
+            <p className="text-sm text-slate-500 mt-1">Version {appVersion}</p>
             <p className="text-sm text-slate-500 mt-3">
               A modern desktop office suite for viewing and editing documents.
             </p>
