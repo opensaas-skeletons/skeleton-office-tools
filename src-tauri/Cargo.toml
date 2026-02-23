@@ -1,6 +1,6 @@
 [package]
 name = "skeleton-office-tools"
-version = "0.1.0"
+version = "0.2.0"
 description = "A free PDF viewer and editor"
 authors = ["opensaas-skeletons"]
 edition = "2021"

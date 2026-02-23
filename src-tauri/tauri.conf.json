@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicholashamilton/nicholashamilton.github.io/refs/heads/main/schemas/tauri-conf-v2.json",
   "productName": "Office Tools",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.opensaas-skeletons.office-tools",
   "build": {
     "beforeDevCommand": "npm run dev",
